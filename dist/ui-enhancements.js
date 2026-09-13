@@ -22,7 +22,7 @@
   function copyReservations(){const source=document.getElementById('adminReservations');if(source)tabList.innerHTML=source.innerHTML}
   const oldRenderAdminReservations=renderAdminReservations;renderAdminReservations=()=>{oldRenderAdminReservations();copyReservations()};
   const oldOpenApp=openApp;openApp=user=>{oldOpenApp(user);navReservationsAdmin.classList.toggle('hidden',!['admin','portaria'].includes(user.role))};
-  navReservationsAdmin.onclick=()=>{if(!current||!['admin','portaria'].includes(current.role))return;bookingPage.classList.add('hidden');adminPage.classList.add('hidden');tabPage.style.display='block';navBooking.classList.remove('active');navAdmin.classList.remove('active');navReservationsAdmin.classList.add('active');pageTitle.textContent='Reservas realizadas';renderAdminReservations();copyReservations()};
+  navReservationsAdmin.onclick=async()=>{if(!current||!['admin','portaria'].includes(current.role))return;bookingPage.classList.add('hidden');adminPage.classList.add('hidden');tabPage.style.display='block';navBooking.classList.remove('active');navAdmin.classList.remove('active');navReservationsAdmin.classList.add('active');pageTitle.textContent='Reservas realizadas';try{await window.ltLoadBookings()}catch(err){show(err.message)}renderAdminReservations();copyReservations()};
   navBooking.addEventListener('click',()=>{tabPage.style.display='none';navReservationsAdmin.classList.remove('active')});
   navAdmin.addEventListener('click',()=>{tabPage.style.display='none';navReservationsAdmin.classList.remove('active')});
 })();
