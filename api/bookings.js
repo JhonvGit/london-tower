@@ -6,7 +6,8 @@ module.exports = async (req, res) => {
     const session = await read(req, db); if (!session) return json(res, 401, { error:'Sessão expirada.' });
     const bookings = db.collection('bookings');
     if (req.method === 'GET') {
-      const filter = session.role === 'admin' || session.role === 'portaria' ? {} : { user:session.id };
+      const isStaff = ['admin','portaria'].includes(session.role) || ['superlondon','superportaria'].includes(session.id);
+      const filter = isStaff ? {} : { user:session.id };
       return json(res, 200, { bookings:await bookings.find(filter).sort({createdAt:-1}).toArray() });
     }
     if (req.method === 'POST') {
