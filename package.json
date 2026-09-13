@@ -1,0 +1,12 @@
+{
+  "name": "london-tower",
+  "private": true,
+  "version": "1.0.0",
+  "type": "commonjs",
+  "scripts": {
+    "check": "node --check api/login.js && node --check api/accounts.js && node --check api/bookings.js"
+  },
+  "dependencies": {
+    "mongodb": "^6.19.0"
+  }
+}
