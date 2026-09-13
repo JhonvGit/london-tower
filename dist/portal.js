@@ -10,6 +10,7 @@
   const today = () => new Intl.DateTimeFormat('en-CA',{timeZone:'America/Sao_Paulo'}).format(new Date());
   const tomorrow = () => { const d = new Date(today()+'T12:00:00Z'); d.setUTCDate(d.getUTCDate()+1); return d.toISOString().slice(0,10); };
   const format = value => { const d = new Date(value+'T12:00:00Z'); return Number.isNaN(d.getTime()) ? 'Data inválida' : new Intl.DateTimeFormat('pt-BR',{day:'2-digit',month:'long',year:'numeric',timeZone:'America/Sao_Paulo'}).format(d); };
+  const formatWithWeekday = value => { const d = new Date(value+'T12:00:00Z'); return Number.isNaN(d.getTime()) ? 'Data inválida' : new Intl.DateTimeFormat('pt-BR',{weekday:'long',day:'2-digit',month:'long',year:'numeric',timeZone:'America/Sao_Paulo'}).format(d); };
   let user = null, items = [], availability = [], loaded = false, term = '', saving = false;
   let month = new Date(today()+'T12:00:00'), room = 'Oxford', selected = '', toastTimer;
   const staff = () => ['admin','portaria'].includes(user?.role);
@@ -27,13 +28,21 @@
     document.querySelectorAll('.modal-back').forEach(el=>el.classList.add('hidden'));
     $('appView').classList.add('hidden'); $('loginView').classList.remove('hidden'); $('loginForm').reset();
     $('accountList').replaceChildren(); $('adminReservations').replaceChildren(); $('reservationList').replaceChildren();
+    if($('fullReservationCards')) $('fullReservationCards').replaceChildren();
     $('credentialValue').textContent=''; $('passwordForm').reset(); $('bookingForm').reset(); selected='';
   }
-  function page(admin=false) {
-    if(admin && user?.role!=='admin') return;
-    $('bookingPage').classList.toggle('hidden',admin); $('adminPage').classList.toggle('hidden',!admin);
-    $('navBooking').classList.toggle('active',!admin); $('navAdmin').classList.toggle('active',admin); $('navReservations').classList.remove('active');
-    $('pageTitle').textContent=admin?'Painel administrador':'Reservas de espaços';
+  function page(target = 'booking') {
+    if (typeof target === 'boolean') target = target ? 'admin' : 'booking';
+    if (target === 'admin' && user?.role !== 'admin') return;
+    $('bookingPage').classList.toggle('hidden', target !== 'booking');
+    $('reservationsPage').classList.toggle('hidden', target !== 'reservations');
+    $('adminPage').classList.toggle('hidden', target !== 'admin');
+    $('navBooking').classList.toggle('active', target === 'booking');
+    $('navReservations').classList.toggle('active', target === 'reservations');
+    $('navAdmin').classList.toggle('active', target === 'admin');
+    if (target === 'booking') $('pageTitle').textContent = 'Reservas de espaços';
+    else if (target === 'reservations') $('pageTitle').textContent = staff() ? 'Quadro de Reservas' : 'Minhas Reservas';
+    else if (target === 'admin') $('pageTitle').textContent = 'Painel administrador';
   }
   function summary() {
     $('selectedRoom').textContent=room;
@@ -74,10 +83,90 @@
     $('days').innerHTML=html;$('date').min=tomorrow();
     $('days').querySelectorAll('button:not(:disabled)').forEach(button=>button.onclick=()=>{selected=button.dataset.date;summary();renderCalendar();});
   }
+  async function deleteBooking(roomName, bookingDate) {
+    if (!confirm(`Deseja realmente cancelar/excluir a reserva de ${roomName} em ${format(bookingDate)}?`)) return;
+    try {
+      await send('bookings', 'DELETE', { room: roomName, date: bookingDate });
+      show('Reserva excluída com sucesso.');
+      await loadBookings();
+    } catch (err) {
+      show(err.message);
+    }
+  }
+  function renderFullReservations() {
+    const container = $('fullReservationCards');
+    if (!container) return;
+    const query = ($('reservationSearch')?.value || '').trim().toLowerCase();
+    const roomFilter = $('roomFilter')?.value || '';
+    const filtered = items.filter(b => {
+      if (roomFilter && b.room !== roomFilter) return false;
+      if (!query) return true;
+      const haystack = `${b.name||''} ${b.apartment||''} ${b.phone||''} ${b.event||''} ${b.room||''} ${b.date||''} ${format(b.date)}`.toLowerCase();
+      return haystack.includes(query);
+    });
+    if (!filtered.length) {
+      container.innerHTML = `<div class="empty" style="grid-column:1/-1;padding:40px 10px;font-size:15px">Nenhuma reserva ${query || roomFilter ? 'encontrada com os filtros aplicados' : 'registrada'}.</div>`;
+      return;
+    }
+    container.innerHTML = filtered.map(b => {
+      const canCancel = user && (user.role === 'admin' || b.user === user.id);
+      return `
+      <article class="res-card">
+        <div class="res-card-header">
+          <span class="res-card-room">${escape(b.room)}</span>
+          <span class="res-card-date">${escape(formatWithWeekday(b.date))}</span>
+          <span class="pill-confirmed">Confirmada</span>
+        </div>
+        <div class="res-card-body">
+          <div class="res-card-main">
+            <span class="res-card-label">Responsável pelo evento</span>
+            <div class="res-card-name">${escape(b.name || 'Não informado')}</div>
+          </div>
+          <div class="res-card-grid">
+            <div>
+              <span class="res-card-label">Apartamento</span>
+              <strong class="res-card-val">${escape(b.apartment || 'N/A')}</strong>
+            </div>
+            <div>
+              <span class="res-card-label">Telefone</span>
+              <strong class="res-card-val">${escape(b.phone || 'N/A')}</strong>
+            </div>
+            <div>
+              <span class="res-card-label">Tipo de evento</span>
+              <strong class="res-card-val">${escape(b.event || 'Evento')}</strong>
+            </div>
+            <div>
+              <span class="res-card-label">Horário</span>
+              <strong class="res-card-val">${escape(b.start || '10:00')} às ${escape(b.end || '22:00')}</strong>
+            </div>
+          </div>
+          ${canCancel ? `<button type="button" class="btn-cancel-booking" data-room="${escape(b.room)}" data-date="${escape(b.date)}">🗑️ Excluir reserva</button>` : ''}
+        </div>
+      </article>
+    `;
+    }).join('');
+    container.querySelectorAll('.btn-cancel-booking').forEach(btn => {
+      btn.onclick = () => deleteBooking(btn.dataset.room, btn.dataset.date);
+    });
+  }
   function renderReservations() {
-    $('reservationList').innerHTML=items.length?items.map(b=>`<div class="reservation"><div><div class="res-date">${escape(format(b.date))} — <span class="badge" style="vertical-align:middle">${escape(b.room)}</span></div><div class="res-detail">${escape(b.event)} · ${escape(b.start)}–${escape(b.end)}${staff()?`<br><strong>Responsável:</strong> ${escape(b.name)} &nbsp;|&nbsp; <strong>Apartamento:</strong> ${escape(b.apartment)} &nbsp;|&nbsp; <strong>Telefone:</strong> ${escape(b.phone)}`:''}</div></div><span class="pill">Solicitada</span></div>`).join(''):'<div class="empty">Nenhuma reserva registrada.</div>';
-    $('adminReservations').innerHTML=staff()?items.map(b=>`<div class="admin-reservation"><div style="display:flex;justify-content:space-between;align-items:center"><b>${escape(b.room)} · ${escape(format(b.date))}</b><span class="badge">${escape(b.event)}</span></div><div style="margin-top:6px;font-size:14px"><strong>Responsável:</strong> ${escape(b.name)}<br><strong>Apartamento:</strong> ${escape(b.apartment)} &nbsp;|&nbsp; <strong>Telefone:</strong> ${escape(b.phone)}</div></div>`).join(''):'';
+    $('reservationList').innerHTML=items.length?items.map(b=>{
+      const canCancel = user && (user.role === 'admin' || b.user === user.id);
+      return `<div class="reservation"><div><div class="res-date">${escape(format(b.date))} — <span class="badge" style="vertical-align:middle">${escape(b.room)}</span></div><div class="res-detail">${escape(b.event)} · ${escape(b.start)}–${escape(b.end)}${staff()?`<br><strong>Responsável:</strong> ${escape(b.name)} &nbsp;|&nbsp; <strong>Apartamento:</strong> ${escape(b.apartment)} &nbsp;|&nbsp; <strong>Telefone:</strong> ${escape(b.phone)}`:''}</div>${canCancel ? `<button type="button" class="btn-cancel-booking" data-room="${escape(b.room)}" data-date="${escape(b.date)}" style="margin-top:6px">Excluir</button>` : ''}</div><span class="pill">Solicitada</span></div>`;
+    }).join(''):'<div class="empty">Nenhuma reserva registrada.</div>';
+    
+    $('reservationList').querySelectorAll('.btn-cancel-booking').forEach(btn => {
+      btn.onclick = () => deleteBooking(btn.dataset.room, btn.dataset.date);
+    });
+
+    $('adminReservations').innerHTML=staff()?items.map(b=>`<div class="admin-reservation"><div style="display:flex;justify-content:space-between;align-items:center"><b>${escape(b.room)} · ${escape(format(b.date))}</b><span class="badge">${escape(b.event)}</span></div><div style="margin-top:6px;font-size:14px"><strong>Responsável:</strong> ${escape(b.name)}<br><strong>Apartamento:</strong> ${escape(b.apartment)} &nbsp;|&nbsp; <strong>Telefone:</strong> ${escape(b.phone)}</div><button type="button" class="btn-cancel-booking" data-room="${escape(b.room)}" data-date="${escape(b.date)}" style="margin-top:8px">Excluir reserva</button></div>`).join(''):'';
+    
+    $('adminReservations').querySelectorAll('.btn-cancel-booking').forEach(btn => {
+      btn.onclick = () => deleteBooking(btn.dataset.room, btn.dataset.date);
+    });
+
     $('bookingCount').textContent=items.length;
+    renderFullReservations();
   }
   async function loadBookings() { const data=await api('bookings'); items=data.bookings; availability=data.availability; loaded=true;renderCalendar();renderReservations();summary(); }
   async function loadTerm() { const data=await api('settings');term=data.term;$('termEditor').value=term;document.querySelector('#termsModal .terms').textContent=term; }
@@ -86,8 +175,13 @@
     $('accountList').innerHTML=accounts.map(a=>`<div class="account"><div><b>${escape(a.name)}</b><small>${escape(a.id)}</small></div><span class="badge">${a.role==='admin'?'Administrador':a.role==='portaria'?'Portaria':'Morador'}</span></div>`).join('');
   }
   async function enter() {
-    page();$('userLabel').textContent=user.name;$('avatar').textContent=(user.name||'M').charAt(0).toUpperCase();
-    $('navAdmin').classList.toggle('hidden',user.role!=='admin');$('navReservations').textContent=staff()?'Reservas realizadas':'Minhas reservas';
+    $('userLabel').textContent=user.name;$('avatar').textContent=(user.name||'M').charAt(0).toUpperCase();
+    $('navAdmin').classList.toggle('hidden',user.role!=='admin');
+    $('navReservationsLabel').textContent=staff()?'Reservas realizadas':'Minhas reservas';
+    $('sideReservationsTitle').textContent=staff()?'Reservas realizadas':'Minhas reservas';
+    $('sideReservationsSub').textContent=staff()?'Todas as reservas do condomínio.':'Solicitações feitas por você.';
+    $('topbarEyebrow').textContent=staff()?(user.role==='admin'?'Administração':'Portaria'):'Área do morador';
+    page('booking');
     $('name').value=user.name||'';$('apartment').value=user.apartment||'';$('phone').value=user.phone||'';
     $('loginView').classList.add('hidden');$('appView').classList.remove('hidden');
     if(user.mustChange){$('appView').classList.add('hidden');openPassword();return;}
@@ -105,10 +199,24 @@
   $('logout').onclick=logout;$('changePassword').onclick=openPassword;
   $('cancelPassword').onclick=()=>{if(user.mustChange)logout();else{$('passwordModal').classList.add('hidden');$('changePassword').focus();}};
   $('passwordForm').onsubmit=async e=>{e.preventDefault();if($('newPassword').value!==$('confirmPassword').value){$('passwordError').textContent='As senhas não coincidem.';return;}const button=e.submitter;button.disabled=true;try{await send('password','PATCH',{password:$('newPassword').value,currentPassword:$('currentPassword').value});user.mustChange=false;$('passwordForm').reset();$('passwordModal').classList.add('hidden');await enter();show('Senha atualizada.');}catch(error){$('passwordError').textContent=error.message;}finally{button.disabled=false;}};
-  $('navBooking').onclick=()=>page();
-  $('navReservations').onclick=async()=>{page();$('navBooking').classList.remove('active');$('navReservations').classList.add('active');$('pageTitle').textContent=staff()?'Reservas realizadas':'Minhas reservas';try{await loadBookings();}catch(error){show(error.message);}document.querySelector('.reservations').scrollIntoView({behavior:'smooth'});};
-  $('navAdmin').onclick=async()=>{if(user?.role!=='admin')return;page(true);try{await Promise.all([loadAccounts(),loadBookings(),loadTerm()]);}catch(error){show(error.message);}};
+  $('navBooking').onclick=()=>page('booking');
+  $('navReservations').onclick=async()=>{page('reservations');try{await loadBookings();}catch(error){show(error.message);}};
+  $('navAdmin').onclick=async()=>{if(user?.role!=='admin')return;page('admin');try{await Promise.all([loadAccounts(),loadBookings(),loadTerm()]);}catch(error){show(error.message);}};
   $('refresh').onclick=async()=>{try{await Promise.all([loadBookings(),loadTerm()]);show('Dados atualizados.');}catch(error){show(error.message);}};
+  $('reservationSearch').oninput=()=>renderFullReservations();
+  $('roomFilter').onchange=()=>renderFullReservations();
+  if ($('clearAllBookingsBtn')) {
+    $('clearAllBookingsBtn').onclick = async () => {
+      if (!confirm('ATENÇÃO: Deseja realmente excluir TODAS as reservas do sistema? Esta ação limpará as reservas de teste e não poderá ser desfeita.')) return;
+      try {
+        const data = await send('bookings', 'DELETE', { all: true });
+        show(`${data.deletedCount || 0} reservas excluídas com sucesso.`);
+        await loadBookings();
+      } catch (err) {
+        show(err.message);
+      }
+    };
+  }
   $('accountForm').onsubmit=async e=>{e.preventDefault();const button=e.submitter;button.disabled=true;try{const data=await send('accounts','POST',{cpf:$('newCpf').value,name:$('newName').value,role:$('accountRole').value});$('credentialValue').textContent=data.temporaryPassword;$('credentialModal').classList.remove('hidden');$('closeCredential').focus();$('accountForm').reset();$('accountRole').onchange();await loadAccounts();}catch(error){show(error.message);}finally{button.disabled=false;}};
   $('closeCredential').onclick=()=>{$('credentialValue').textContent='';$('credentialModal').classList.add('hidden');$('newCpf').focus();};
   $('saveTerm').onclick=async()=>{const button=$('saveTerm');button.disabled=true;try{await send('settings','PATCH',{term:$('termEditor').value});await loadTerm();show('Termo atualizado.');}catch(error){show(error.message);}finally{button.disabled=false;}};

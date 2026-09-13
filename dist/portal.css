@@ -10,9 +10,35 @@
 .booking-notice.occupied b{color:#781c15;display:block;margin-bottom:4px}
 .booking-notice p{margin:4px 0 0;font-size:13px}
 .occupied-day .status{background:var(--red)!important}
+
+.reservations-filters{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.reservations-filters input{max-width:280px;padding:9px 12px;font-size:14px}
+.reservations-filters select{max-width:180px;padding:9px 30px 9px 12px;font-size:14px}
+.reservation-cards-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:16px;margin-top:16px}
+.res-card{background:#fbfcfd;border:1px solid var(--line);border-radius:14px;padding:18px;box-shadow:0 2px 8px #10253f08;display:flex;flex-direction:column;gap:12px;transition:transform .15s}
+.res-card:hover{border-color:#b4cddc}
+.res-card-header{display:flex;justify-content:space-between;align-items:center;gap:8px;border-bottom:1px solid var(--line);padding-bottom:12px}
+.res-card-room{font-weight:800;font-size:13px;padding:4px 10px;border-radius:8px;background:#eaf2f6;color:var(--blue)}
+.res-card-date{font-weight:750;font-size:14px;color:var(--ink)}
+.pill-confirmed{font-size:11px;font-weight:800;background:#e8f5e9;color:#2e7d32;padding:4px 8px;border-radius:999px}
+.res-card-body{display:flex;flex-direction:column;gap:10px}
+.res-card-main{background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.res-card-label{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:750}
+.res-card-name{font-size:16px;font-weight:800;color:var(--ink);margin-top:2px}
+.res-card-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.res-card-grid div{background:#fff;border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+.res-card-val{display:block;font-size:13px;font-weight:700;color:var(--ink);margin-top:2px}
+.btn-cancel-booking{border:1px solid var(--line);background:#fff;color:var(--red);border-radius:8px;padding:7px 12px;font-size:12px;font-weight:750;cursor:pointer;margin-top:4px;align-self:flex-start;transition:.15s}
+.btn-cancel-booking:hover{background:#fdf2f1;border-color:#f5c2be}
+
 [data-theme="dark"]{--mist:#0c1724;--white:#142337;--ink:#edf3f8;--muted:#aebbc8;--line:#2d4053;--shadow:0 22px 55px #0006}
 [data-theme="dark"] .panel,[data-theme="dark"] .modal,[data-theme="dark"] .login-box,[data-theme="dark"] .room,[data-theme="dark"] .day,[data-theme="dark"] .cal-nav button,[data-theme="dark"] input,[data-theme="dark"] select,[data-theme="dark"] textarea,[data-theme="dark"] .secondary{background:var(--white);color:var(--ink)}
 [data-theme="dark"] .hero{background:linear-gradient(135deg,#172b40,#1d3b50)}[data-theme="dark"] .summary,[data-theme="dark"] .stat,[data-theme="dark"] .terms{background:#102033;color:var(--ink)}
 [data-theme="dark"] .day.selected{background:var(--blue)}
 [data-theme="dark"] .booking-notice.occupied{background:#3a1818;border-color:#652727;color:#fca5a5}
 [data-theme="dark"] .booking-notice.occupied b{color:#fecaca}
+[data-theme="dark"] .res-card,[data-theme="dark"] .res-card-main,[data-theme="dark"] .res-card-grid div{background:var(--white);border-color:var(--line)}
+[data-theme="dark"] .pill-confirmed{background:#1b3824;color:#81c784}
+[data-theme="dark"] .res-card-room{background:#19354d;color:#7ec3ea}
+[data-theme="dark"] .btn-cancel-booking{background:#142337;border-color:#5c2424;color:#fca5a5}
+[data-theme="dark"] .btn-cancel-booking:hover{background:#3a1818}

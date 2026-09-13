@@ -1,9 +1,11 @@
 const { getDb } = require('./_lib/db');
 const { read, json, body, failure } = require('./_lib/security');
 const { ROOMS, text, validDate, today } = require('./_lib/validation');
+const { ObjectId } = require('mongodb');
+
 module.exports = async (req, res) => {
   try {
-    if (!['GET','POST'].includes(req.method)) return json(res, 405, { error:'Método não permitido.' });
+    if (!['GET','POST','DELETE'].includes(req.method)) return json(res, 405, { error:'Método não permitido.' });
     const db = await getDb(), session = await read(req, db);
     if (!session) return json(res, 401, { error:'Sessão expirada.' });
     if (session.mustChange) return json(res, 403, { error:'Altere sua senha inicial antes de continuar.' });
@@ -13,6 +15,29 @@ module.exports = async (req, res) => {
       const items = await bookings.find(isStaff ? {} : { user:session.id }).sort({createdAt:-1}).toArray();
       const availability = await bookings.find({ date:{ $gt:today() } }, { projection:{ _id:0, room:1, date:1 } }).toArray();
       return json(res, 200, { bookings:items, availability });
+    }
+    if (req.method === 'DELETE') {
+      const data = await body(req).catch(() => ({}));
+      if (data.all === true) {
+        if (session.role !== 'admin') return json(res, 403, { error:'Apenas o administrador pode limpar todas as reservas.' });
+        const result = await bookings.deleteMany({});
+        return json(res, 200, { ok:true, deletedCount:result.deletedCount });
+      }
+      const filter = {};
+      if (data.id) {
+        try { filter._id = new ObjectId(String(data.id)); } catch { filter._id = data.id; }
+      } else if (data.room && data.date) {
+        filter.room = data.room;
+        filter.date = data.date;
+      } else {
+        return json(res, 400, { error:'Informe a reserva a ser cancelada (id ou salão e data).' });
+      }
+      if (session.role !== 'admin') {
+        filter.user = session.id;
+      }
+      const result = await bookings.deleteOne(filter);
+      if (result.deletedCount === 0) return json(res, 404, { error:'Reserva não encontrada ou sem permissão para exclusão.' });
+      return json(res, 200, { ok:true });
     }
     const data = await body(req);
     if (!ROOMS.includes(data.room) || !validDate(data.date)) return json(res, 400, { error:'Salão ou data inválidos.' });

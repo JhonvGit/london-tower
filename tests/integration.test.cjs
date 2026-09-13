@@ -43,6 +43,24 @@ test('booking validation rejects impossible dates, query objects, missing consen
   for(const data of [{date:'2099-02-30'},{date:{$gt:''}},{room:'Unknown'},{acceptTerms:false},{start:'12:00'},{name:{$ne:null}},{date:'2000-01-01'}])assert.equal((await call('bookings','POST',booking(data),cookie)).status,400);
   assert.equal(await db.collection('bookings').countDocuments(),0);
 });
+test('DELETE booking allows resident to cancel own booking and admin to cancel any or clean all pentest bookings', async () => {
+  const alice=await account('alice'), bob=await account('bob'), admin=await account('superlondon','admin');
+  await call('bookings','POST',booking({room:'Oxford',date:'2099-09-15'}),alice);
+  await call('bookings','POST',booking({room:'Napoli',date:'2099-09-16'}),bob);
+  assert.equal(await db.collection('bookings').countDocuments(),2);
+
+  // Bob cannot cancel Alice's booking
+  assert.equal((await call('bookings','DELETE',{room:'Oxford',date:'2099-09-15'},bob)).status,404);
+  // Alice can cancel her own booking
+  assert.equal((await call('bookings','DELETE',{room:'Oxford',date:'2099-09-15'},alice)).status,200);
+  assert.equal(await db.collection('bookings').countDocuments(),1);
+
+  // Admin can clean all remaining bookings
+  const cleanResult = await call('bookings','DELETE',{all:true},admin);
+  assert.equal(cleanResult.status,200);
+  assert.equal(cleanResult.data.deletedCount,1);
+  assert.equal(await db.collection('bookings').countDocuments(),0);
+});
 test('first-access sessions cannot bypass password change or administrative permissions', async () => {
   const cookie=await account('admin','admin',true);
   assert.equal((await call('bookings','GET',{},cookie)).status,403);
@@ -162,7 +180,7 @@ test('portal escapes stored markup and synchronizes typed booking dates with the
     assert.equal(await db.collection('bookings').countDocuments({date:'2099-09-16'}),1);
   }finally{dom.window.close();}
 });
-test('portaria and admin see responsible contact details and occupied date summary', async () => {
+test('portaria and admin see responsible contact details, occupied date summary and dedicated reservations tab', async () => {
   const resident=await account('resident');await account('staff','portaria');
   await call('bookings','POST',booking({name:'Contato morador',apartment:'45B',phone:'11987654321',event:'Casamento',date:'2099-09-20'}),resident);
   const {dom,$,submit}=browser();
@@ -170,6 +188,24 @@ test('portaria and admin see responsible contact details and occupied date summa
     $('loginId').value='staff';$('loginPass').value='initial-password';submit('loginForm');
     await until(()=>$('reservationList').textContent.includes('Contato morador'));
     assert.match($('reservationList').textContent,/11987654321/);assert.equal($('navAdmin').classList.contains('hidden'),true);
+    
+    // Dedicated reservations tab
+    await $('navReservations').onclick();
+    await until(()=>$('reservationsPage').classList.contains('hidden')===false && $('fullReservationCards').textContent.includes('Contato morador'));
+    assert.equal($('bookingPage').classList.contains('hidden'),true);
+    assert.match($('fullReservationCards').textContent,/Contato morador/);
+    assert.match($('fullReservationCards').textContent,/45B/);
+    assert.match($('fullReservationCards').textContent,/Casamento/);
+
+    // Search filter
+    $('reservationSearch').value = '45B';
+    $('reservationSearch').dispatchEvent(new dom.window.Event('input'));
+    assert.match($('fullReservationCards').textContent,/Contato morador/);
+
+    $('reservationSearch').value = 'NenhumApto999';
+    $('reservationSearch').dispatchEvent(new dom.window.Event('input'));
+    assert.match($('fullReservationCards').textContent,/Nenhuma reserva/);
+
     const dayBtn=$('days').querySelector('[data-date="2099-09-20"]');
     if(dayBtn) {
       dayBtn.click();
