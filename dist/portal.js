@@ -35,10 +35,31 @@
     $('navBooking').classList.toggle('active',!admin); $('navAdmin').classList.toggle('active',admin); $('navReservations').classList.remove('active');
     $('pageTitle').textContent=admin?'Painel administrador':'Reservas de espaços';
   }
-  function summary() { $('selectedRoom').textContent=room; $('selectedDate').textContent=selected?format(selected):'Escolha uma data no calendário'; $('date').value=selected; }
+  function summary() {
+    $('selectedRoom').textContent=room;
+    $('date').value=selected;
+    const bookingInfo = items.find(b => b.room === room && b.date === selected);
+    const occupied = busy(selected);
+    const noticeEl = $('bookingNotice');
+    if (!selected) {
+      $('selectedDate').textContent='Escolha uma data no calendário';
+      if (noticeEl) noticeEl.remove();
+      return;
+    }
+    $('selectedDate').textContent=format(selected);
+    if (occupied) {
+      const details = (bookingInfo && staff())
+        ? `<div id="bookingNotice" class="booking-notice occupied"><b>Data ocupada:</b><p><strong>Responsável:</strong> ${escape(bookingInfo.name)}<br><strong>Apartamento:</strong> ${escape(bookingInfo.apartment)} &nbsp;|&nbsp; <strong>Telefone:</strong> ${escape(bookingInfo.phone)}<br><strong>Evento:</strong> ${escape(bookingInfo.event)}</p></div>`
+        : `<div id="bookingNotice" class="booking-notice occupied"><b>Data ocupada</b><p>Este salão já possui uma reserva confirmada para esta data.</p></div>`;
+      if (noticeEl) noticeEl.outerHTML = details;
+      else $('selectedDate').insertAdjacentHTML('afterend', details);
+    } else {
+      if (noticeEl) noticeEl.remove();
+    }
+  }
   function renderRooms() {
     $('rooms').innerHTML=rooms.map(r=>`<button type="button" class="room ${room===r.name?'selected':''}" aria-pressed="${room===r.name}" data-room="${r.name}"><img class="room-img" src="https://images.unsplash.com/${r.image}?auto=format&fit=crop&w=900&q=80" alt="Imagem ilustrativa do salão ${r.name}"><div class="room-body"><div class="room-name">${r.name}</div><div class="room-desc">${r.desc}</div><div class="room-meta"><span>Salão de festas</span><span>até ${r.capacity} pessoas</span></div></div></button>`).join('');
-    $('rooms').querySelectorAll('button').forEach(button=>button.onclick=()=>{room=button.dataset.room;if(busy(selected))selected='';renderRooms();renderCalendar();summary();});
+    $('rooms').querySelectorAll('button').forEach(button=>button.onclick=()=>{room=button.dataset.room;renderRooms();renderCalendar();summary();});
   }
   function renderCalendar() {
     const y=month.getFullYear(), m=month.getMonth(), label=new Intl.DateTimeFormat('pt-BR',{month:'long',year:'numeric'});
@@ -47,18 +68,18 @@
     for(let i=-1;i<=11;i++){const d=new Date(y,m+i,1), option=document.createElement('option');option.value=`${d.getFullYear()}-${d.getMonth()}`;option.textContent=label.format(d);option.selected=i===0;$('monthSelect').append(option);}
     let html='<div class="day blank"></div>'.repeat(new Date(y,m,1).getDay());
     for(let n=1;n<=new Date(y,m+1,0).getDate();n++){
-      const date=`${y}-${String(m+1).padStart(2,'0')}-${String(n).padStart(2,'0')}`, occupied=busy(date), disabled=!loaded||date<=today()||occupied;
-      html+=`<button type="button" class="day ${disabled?'disabled':''} ${selected===date?'selected':''}" data-date="${date}" aria-label="${format(date)}${occupied?', ocupado':''}" ${disabled?'disabled':''}>${n}<span class="status" style="background:${occupied?'var(--red)':disabled?'var(--muted)':'var(--green)'}"></span></button>`;
+      const date=`${y}-${String(m+1).padStart(2,'0')}-${String(n).padStart(2,'0')}`, occupied=busy(date), disabled=!loaded||date<=today();
+      html+=`<button type="button" class="day ${disabled?'disabled':''} ${occupied?'occupied-day':''} ${selected===date?'selected':''}" data-date="${date}" aria-label="${format(date)}${occupied?', ocupado':''}" ${disabled?'disabled':''}>${n}<span class="status" style="background:${occupied?'var(--red)':disabled?'var(--muted)':'var(--green)'}"></span></button>`;
     }
     $('days').innerHTML=html;$('date').min=tomorrow();
     $('days').querySelectorAll('button:not(:disabled)').forEach(button=>button.onclick=()=>{selected=button.dataset.date;summary();renderCalendar();});
   }
   function renderReservations() {
-    $('reservationList').innerHTML=items.length?items.map(b=>`<div class="reservation"><div><div class="res-date">${escape(format(b.date))}</div><div class="res-detail">${escape(b.room)} · ${escape(b.event)} · ${escape(b.start)}–${escape(b.end)}${staff()?`<br>Responsável: ${escape(b.name)} · Apartamento: ${escape(b.apartment)} · Telefone: ${escape(b.phone)}`:''}</div></div><span class="pill">Solicitada</span></div>`).join(''):'<div class="empty">Nenhuma reserva registrada.</div>';
-    $('adminReservations').innerHTML=staff()?items.map(b=>`<div class="admin-reservation"><b>${escape(b.room)} · ${escape(format(b.date))}</b><small>Responsável: ${escape(b.name)} · Apartamento: ${escape(b.apartment)} · Telefone: ${escape(b.phone)} · ${escape(b.event)}</small></div>`).join(''):'';
+    $('reservationList').innerHTML=items.length?items.map(b=>`<div class="reservation"><div><div class="res-date">${escape(format(b.date))} — <span class="badge" style="vertical-align:middle">${escape(b.room)}</span></div><div class="res-detail">${escape(b.event)} · ${escape(b.start)}–${escape(b.end)}${staff()?`<br><strong>Responsável:</strong> ${escape(b.name)} &nbsp;|&nbsp; <strong>Apartamento:</strong> ${escape(b.apartment)} &nbsp;|&nbsp; <strong>Telefone:</strong> ${escape(b.phone)}`:''}</div></div><span class="pill">Solicitada</span></div>`).join(''):'<div class="empty">Nenhuma reserva registrada.</div>';
+    $('adminReservations').innerHTML=staff()?items.map(b=>`<div class="admin-reservation"><div style="display:flex;justify-content:space-between;align-items:center"><b>${escape(b.room)} · ${escape(format(b.date))}</b><span class="badge">${escape(b.event)}</span></div><div style="margin-top:6px;font-size:14px"><strong>Responsável:</strong> ${escape(b.name)}<br><strong>Apartamento:</strong> ${escape(b.apartment)} &nbsp;|&nbsp; <strong>Telefone:</strong> ${escape(b.phone)}</div></div>`).join(''):'';
     $('bookingCount').textContent=items.length;
   }
-  async function loadBookings() { const data=await api('bookings'); items=data.bookings; availability=data.availability; loaded=true;if(busy(selected))selected='';renderCalendar();renderReservations();summary(); }
+  async function loadBookings() { const data=await api('bookings'); items=data.bookings; availability=data.availability; loaded=true;renderCalendar();renderReservations();summary(); }
   async function loadTerm() { const data=await api('settings');term=data.term;$('termEditor').value=term;document.querySelector('#termsModal .terms').textContent=term; }
   async function loadAccounts() {
     const {accounts}=await api('accounts');$('accountCount').textContent=accounts.length;
@@ -103,4 +124,13 @@
   document.addEventListener('keydown',e=>{const modal=[...document.querySelectorAll('.modal-back:not(.hidden)')].at(-1);if(!modal)return;if(e.key==='Tab'){const controls=[...modal.querySelectorAll('button,input,textarea')].filter(el=>!el.disabled&&el.getClientRects().length);const first=controls[0],last=controls.at(-1);if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus();}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus();}}if(e.key==='Escape'){if(modal.id==='termsModal')$('cancelTerms').click();else if(modal.id==='passwordModal'&&!user?.mustChange)$('cancelPassword').click();}});
   $('adminRooms').innerHTML=rooms.map(r=>`<div class="account"><div><b>${r.name}</b><small>${r.desc}</small></div><span class="badge">Até ${r.capacity}</span></div>`).join('');
   renderRooms();renderCalendar();summary();
+  (async () => {
+    try {
+      const data = await api('login');
+      if (data && data.user) {
+        user = data.user;
+        await enter();
+      }
+    } catch {}
+  })();
 })();

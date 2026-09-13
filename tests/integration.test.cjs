@@ -108,16 +108,33 @@ test('setup migrates legacy passwords, preserves private passwords and is repeat
   await execFile(process.execPath,['scripts/setup.cjs'],{env});
   assert.equal(await db.collection('users').countDocuments({id:'superlondon'}),1);
 });
+test('GET login restores active session or returns 401 when absent', async () => {
+  const cookie=await account('superlondon','admin');
+  const authed=await call('login','GET',{},cookie);
+  assert.equal(authed.status,200);assert.equal(authed.data.user.id,'superlondon');assert.equal(authed.data.user.role,'admin');
+  const unauthed=await call('login','GET',{});
+  assert.equal(unauthed.status,401);
+});
 async function until(fn) { for(let i=0;i<300;i++){if(fn())return;await new Promise(resolve=>setTimeout(resolve,10));}throw new Error('UI condition timed out'); }
-function browser() {
+function browser(initialCookie='') {
   const dom=new JSDOM(fs.readFileSync(path.resolve('dist/index.html'),'utf8'),{url:'https://london.test/',runScripts:'outside-only',pretendToBeVisual:true});
-  let cookie='';const {window}=dom;window.HTMLElement.prototype.scrollIntoView=function(){};
+  let cookie=initialCookie;const {window}=dom;window.HTMLElement.prototype.scrollIntoView=function(){};
   window.fetch=async(url,options={})=>{const result=await call(url.split('/').at(-1),options.method||'GET',options.body?JSON.parse(options.body):{},cookie);if(result.headers['Set-Cookie'])cookie=result.headers['Set-Cookie'].split(';')[0];return{ok:result.status>=200&&result.status<300,status:result.status,json:async()=>result.data};};
   window.eval(fs.readFileSync(path.resolve('dist/portal.js'),'utf8'));
   const $=id=>window.document.getElementById(id);
   const submit=id=>$(id).dispatchEvent(new window.SubmitEvent('submit',{bubbles:true,cancelable:true,submitter:$(id).querySelector('button[type="submit"]')}));
   return{dom,window,$,submit};
 }
+test('portal automatically restores session on refresh/load when cookie is present', async () => {
+  const cookie=await account('superlondon','admin');
+  const {dom,$}=browser(cookie);
+  try{
+    await until(()=>$('appView').classList.contains('hidden')===false);
+    assert.equal($('loginView').classList.contains('hidden'),true);
+    assert.equal($('userLabel').textContent,'superlondon');
+    assert.equal($('navAdmin').classList.contains('hidden'),false);
+  }finally{dom.window.close();}
+});
 test('portal first-access flow works through the API and contains no local login fallback', async () => {
   await account('new','resident',true);const {dom,$,submit}=browser();
   try{
@@ -145,13 +162,19 @@ test('portal escapes stored markup and synchronizes typed booking dates with the
     assert.equal(await db.collection('bookings').countDocuments({date:'2099-09-16'}),1);
   }finally{dom.window.close();}
 });
-test('portaria sees responsible contact details but has no account administration controls', async () => {
+test('portaria and admin see responsible contact details and occupied date summary', async () => {
   const resident=await account('resident');await account('staff','portaria');
-  await call('bookings','POST',booking({name:'Contato morador',phone:'11987654321'}),resident);
+  await call('bookings','POST',booking({name:'Contato morador',apartment:'45B',phone:'11987654321',event:'Casamento',date:'2099-09-20'}),resident);
   const {dom,$,submit}=browser();
   try{
     $('loginId').value='staff';$('loginPass').value='initial-password';submit('loginForm');
     await until(()=>$('reservationList').textContent.includes('Contato morador'));
     assert.match($('reservationList').textContent,/11987654321/);assert.equal($('navAdmin').classList.contains('hidden'),true);
+    const dayBtn=$('days').querySelector('[data-date="2099-09-20"]');
+    if(dayBtn) {
+      dayBtn.click();
+      assert.match($('selectedDate').parentElement.textContent,/Contato morador/);
+      assert.match($('selectedDate').parentElement.textContent,/45B/);
+    }
   }finally{dom.window.close();}
 });
