@@ -13,11 +13,8 @@ function verifyPassword(password, stored) {
 }
 function sign(payload) {
   const body = Buffer.from(JSON.stringify(payload)).toString('base64url');
-  // O conector do MongoDB no Vercel fornece MONGODB_URI, mas não SESSION_SECRET.
-  // Mantemos SESSION_SECRET como opção recomendada e usamos a URI como fallback
-  // temporário para o ambiente já conectado.
-  const secret = process.env.SESSION_SECRET || process.env.MONGODB_URI;
-  if (!secret) throw new Error('MONGODB_URI não configurada');
+  const secret = process.env.SESSION_SECRET;
+  if (!secret) throw new Error('SESSION_SECRET não configurado');
   const sig = crypto.createHmac('sha256', secret).update(body).digest('base64url');
   return `${body}.${sig}`;
 }
@@ -25,9 +22,8 @@ function read(req) {
   const raw = String(req.headers.cookie || '').split(';').map(v => v.trim()).find(v => v.startsWith(`${COOKIE}=`));
   if (!raw) return null;
   const [body, sig] = raw.slice(COOKIE.length + 1).split('.');
-  const secret = process.env.SESSION_SECRET || process.env.MONGODB_URI;
-  if (!body || !sig || !secret) return null;
-  const expected = crypto.createHmac('sha256', secret).update(body).digest('base64url');
+  if (!body || !sig || !process.env.SESSION_SECRET) return null;
+  const expected = crypto.createHmac('sha256', process.env.SESSION_SECRET).update(body).digest('base64url');
   if (sig.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) return null;
   try { const data = JSON.parse(Buffer.from(body, 'base64url').toString()); return data.exp > Date.now() ? data : null; } catch { return null; }
 }
