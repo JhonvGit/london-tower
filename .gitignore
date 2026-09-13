@@ -1,0 +1,7 @@
+.env
+.env.*
+!.env.example
+node_modules/
+
+# Arquivos enviados temporariamente para o ambiente de trabalho
+upload/
