@@ -11,6 +11,14 @@
 .booking-notice p{margin:4px 0 0;font-size:13px}
 .occupied-day .status{background:var(--red)!important}
 
+.dom-tag{font-size:9px;font-weight:800;color:#b45309;background:#fef3c7;padding:1px 4px;border-radius:4px;display:inline-block;margin-top:2px}
+.sunday-day{border-color:#fcd34d;background:#fffdfa}
+.sunday-day:hover{border-color:#f59e0b;background:#fefce8}
+.booking-notice.sunday-alert{background:#fffbeb;border:1px solid #fde68a;color:#92400e}
+.booking-notice.sunday-alert b{color:#78350f;display:block;margin-bottom:4px}
+.btn-select-sat{background:#2f6d91;color:#fff;border:0;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:750;margin-top:8px;cursor:pointer;display:inline-block}
+.btn-select-sat:hover{background:#245876}
+
 .reservations-filters{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
 .reservations-filters input{max-width:280px;padding:9px 12px;font-size:14px}
 .reservations-filters select{max-width:180px;padding:9px 30px 9px 12px;font-size:14px}
@@ -37,6 +45,10 @@
 [data-theme="dark"] .day.selected{background:var(--blue)}
 [data-theme="dark"] .booking-notice.occupied{background:#3a1818;border-color:#652727;color:#fca5a5}
 [data-theme="dark"] .booking-notice.occupied b{color:#fecaca}
+[data-theme="dark"] .dom-tag{background:#451a03;color:#fbbf24}
+[data-theme="dark"] .sunday-day{border-color:#78350f;background:#1a140a}
+[data-theme="dark"] .booking-notice.sunday-alert{background:#2d1b06;border-color:#78350f;color:#fde68a}
+[data-theme="dark"] .booking-notice.sunday-alert b{color:#fef3c7}
 [data-theme="dark"] .res-card,[data-theme="dark"] .res-card-main,[data-theme="dark"] .res-card-grid div{background:var(--white);border-color:var(--line)}
 [data-theme="dark"] .pill-confirmed{background:#1b3824;color:#81c784}
 [data-theme="dark"] .res-card-room{background:#19354d;color:#7ec3ea}

@@ -1,6 +1,6 @@
 const { getDb } = require('./_lib/db');
 const { read, json, body, failure } = require('./_lib/security');
-const { ROOMS, text, validDate, today } = require('./_lib/validation');
+const { ROOMS, text, validDate, isSunday, today } = require('./_lib/validation');
 const { ObjectId } = require('mongodb');
 
 module.exports = async (req, res) => {
@@ -42,6 +42,7 @@ module.exports = async (req, res) => {
     const data = await body(req);
     if (!ROOMS.includes(data.room) || !validDate(data.date)) return json(res, 400, { error:'Salão ou data inválidos.' });
     if (data.date <= today()) return json(res, 400, { error:'A reserva deve ser feita para uma data futura.' });
+    if (isSunday(data.date)) return json(res, 400, { error:'Não são permitidas reservas aos domingos (a zeladoria só fará a limpeza na segunda-feira). Alugue no sábado para utilizar sábado e domingo.' });
     if (data.start !== '10:00' || data.end !== '22:00') return json(res, 400, { error:'O horário permitido é das 10h às 22h.' });
     if (!text(data.name) || !text(data.apartment, 30) || !text(data.phone, 30) || (data.event !== undefined && !text(data.event, 100))) return json(res, 400, { error:'Preencha nome, apartamento, telefone e evento válidos.' });
     if (data.acceptTerms !== true) return json(res, 400, { error:'É necessário aceitar o termo de responsabilidade.' });

@@ -11,6 +11,8 @@
   const tomorrow = () => { const d = new Date(today()+'T12:00:00Z'); d.setUTCDate(d.getUTCDate()+1); return d.toISOString().slice(0,10); };
   const format = value => { const d = new Date(value+'T12:00:00Z'); return Number.isNaN(d.getTime()) ? 'Data inválida' : new Intl.DateTimeFormat('pt-BR',{day:'2-digit',month:'long',year:'numeric',timeZone:'America/Sao_Paulo'}).format(d); };
   const formatWithWeekday = value => { const d = new Date(value+'T12:00:00Z'); return Number.isNaN(d.getTime()) ? 'Data inválida' : new Intl.DateTimeFormat('pt-BR',{weekday:'long',day:'2-digit',month:'long',year:'numeric',timeZone:'America/Sao_Paulo'}).format(d); };
+  const isSunday = value => { if(!value) return false; const d=new Date(value+'T12:00:00Z'); return !Number.isNaN(d.getTime()) && d.getUTCDay() === 0; };
+  const getPreviousSaturday = value => { if(!value) return ''; const d=new Date(value+'T12:00:00Z'); d.setUTCDate(d.getUTCDate()-1); return d.toISOString().slice(0,10); };
   let user = null, items = [], availability = [], loaded = false, term = '', saving = false;
   let month = new Date(today()+'T12:00:00'), room = 'Oxford', selected = '', toastTimer;
   const staff = () => ['admin','portaria'].includes(user?.role);
@@ -49,6 +51,7 @@
     $('date').value=selected;
     const bookingInfo = items.find(b => b.room === room && b.date === selected);
     const occupied = busy(selected);
+    const sunday = isSunday(selected);
     const noticeEl = $('bookingNotice');
     if (!selected) {
       $('selectedDate').textContent='Escolha uma data no calendário';
@@ -62,6 +65,22 @@
         : `<div id="bookingNotice" class="booking-notice occupied"><b>Data ocupada</b><p>Este salão já possui uma reserva confirmada para esta data.</p></div>`;
       if (noticeEl) noticeEl.outerHTML = details;
       else $('selectedDate').insertAdjacentHTML('afterend', details);
+    } else if (sunday) {
+      const sat = getPreviousSaturday(selected);
+      const satOccupied = busy(sat);
+      const satMsg = sat > today() && !satOccupied
+        ? `<br><button type="button" class="btn-select-sat" id="selectSatBtn" data-date="${sat}">📅 Reservar sábado (${format(sat)})</button>`
+        : '';
+      const details = `<div id="bookingNotice" class="booking-notice sunday-alert"><b>⚠️ Domingo indisponível para reservas</b><p>A zeladoria só fará a limpeza na segunda-feira.<br><strong>Dica:</strong> Alugue no sábado para utilizar no sábado e domingo.${satMsg}</p></div>`;
+      if (noticeEl) noticeEl.outerHTML = details;
+      else $('selectedDate').insertAdjacentHTML('afterend', details);
+      if ($('selectSatBtn')) {
+        $('selectSatBtn').onclick = () => {
+          selected = sat;
+          summary();
+          renderCalendar();
+        };
+      }
     } else {
       if (noticeEl) noticeEl.remove();
     }
@@ -77,8 +96,22 @@
     for(let i=-1;i<=11;i++){const d=new Date(y,m+i,1), option=document.createElement('option');option.value=`${d.getFullYear()}-${d.getMonth()}`;option.textContent=label.format(d);option.selected=i===0;$('monthSelect').append(option);}
     let html='<div class="day blank"></div>'.repeat(new Date(y,m,1).getDay());
     for(let n=1;n<=new Date(y,m+1,0).getDate();n++){
-      const date=`${y}-${String(m+1).padStart(2,'0')}-${String(n).padStart(2,'0')}`, occupied=busy(date), disabled=!loaded||date<=today();
-      html+=`<button type="button" class="day ${disabled?'disabled':''} ${occupied?'occupied-day':''} ${selected===date?'selected':''}" data-date="${date}" aria-label="${format(date)}${occupied?', ocupado':''}" ${disabled?'disabled':''}>${n}<span class="status" style="background:${occupied?'var(--red)':disabled?'var(--muted)':'var(--green)'}"></span></button>`;
+      const date=`${y}-${String(m+1).padStart(2,'0')}-${String(n).padStart(2,'0')}`;
+      const dayOfWeek = new Date(y,m,n).getDay();
+      const sunday = dayOfWeek === 0;
+      const occupied = busy(date);
+      const disabled = !loaded || date<=today();
+      const tip = sunday
+        ? 'Domingos não estão disponíveis para reserva (a zeladoria só fará a limpeza na segunda-feira). Alugue no sábado para usar sábado e domingo.'
+        : occupied
+        ? `${format(date)}, ocupado`
+        : `${format(date)}, disponível`;
+      
+      html+=`<button type="button" class="day ${disabled?'disabled':''} ${sunday?'sunday-day':''} ${occupied?'occupied-day':''} ${selected===date?'selected':''}" data-date="${date}" data-sunday="${sunday}" title="${escape(tip)}" aria-label="${escape(tip)}" ${disabled?'disabled':''}>
+        <span>${n}</span>
+        ${sunday ? '<small class="dom-tag" title="Zeladoria limpa na segunda">Dom</small>' : ''}
+        <span class="status" style="background:${occupied?'var(--red)':sunday?'#d97706':disabled?'var(--muted)':'var(--green)'}"></span>
+      </button>`;
     }
     $('days').innerHTML=html;$('date').min=tomorrow();
     $('days').querySelectorAll('button:not(:disabled)').forEach(button=>button.onclick=()=>{selected=button.dataset.date;summary();renderCalendar();});
@@ -200,7 +233,7 @@
   $('cancelPassword').onclick=()=>{if(user.mustChange)logout();else{$('passwordModal').classList.add('hidden');$('changePassword').focus();}};
   $('passwordForm').onsubmit=async e=>{e.preventDefault();if($('newPassword').value!==$('confirmPassword').value){$('passwordError').textContent='As senhas não coincidem.';return;}const button=e.submitter;button.disabled=true;try{await send('password','PATCH',{password:$('newPassword').value,currentPassword:$('currentPassword').value});user.mustChange=false;$('passwordForm').reset();$('passwordModal').classList.add('hidden');await enter();show('Senha atualizada.');}catch(error){$('passwordError').textContent=error.message;}finally{button.disabled=false;}};
   $('navBooking').onclick=()=>page('booking');
-  $('navReservations').onclick=async()=>{page('reservations');try{await loadBookings();}catch(error){show(error.message);}};
+  $('navReservations').onclick=()=>{page('reservations');renderFullReservations();};
   $('navAdmin').onclick=async()=>{if(user?.role!=='admin')return;page('admin');try{await Promise.all([loadAccounts(),loadBookings(),loadTerm()]);}catch(error){show(error.message);}};
   $('refresh').onclick=async()=>{try{await Promise.all([loadBookings(),loadTerm()]);show('Dados atualizados.');}catch(error){show(error.message);}};
   $('reservationSearch').oninput=()=>renderFullReservations();
@@ -221,10 +254,35 @@
   $('closeCredential').onclick=()=>{$('credentialValue').textContent='';$('credentialModal').classList.add('hidden');$('newCpf').focus();};
   $('saveTerm').onclick=async()=>{const button=$('saveTerm');button.disabled=true;try{await send('settings','PATCH',{term:$('termEditor').value});await loadTerm();show('Termo atualizado.');}catch(error){show(error.message);}finally{button.disabled=false;}};
   $('start').innerHTML='<option>10:00</option>';$('end').innerHTML='<option>22:00</option>';$('start').disabled=true;$('end').disabled=true;
-  $('date').onchange=()=>{selected=$('date').value;if(selected){month=new Date(selected+'T12:00:00');}summary();renderCalendar();};
+  $('date').onchange=()=>{
+    selected=$('date').value;
+    if(selected){
+      month=new Date(selected+'T12:00:00');
+      if(isSunday(selected)) {
+        show('Aos domingos não é permitido reservar (limpeza na segunda). Sugerimos alugar no sábado.');
+      }
+    }
+    summary();
+    renderCalendar();
+  };
   $('prev').onclick=()=>{month=new Date(month.getFullYear(),month.getMonth()-1,1);renderCalendar();};$('next').onclick=()=>{month=new Date(month.getFullYear(),month.getMonth()+1,1);renderCalendar();};
   $('monthSelect').onchange=()=>{const [y,m]=$('monthSelect').value.split('-');month=new Date(+y,+m,1);renderCalendar();};
-  $('bookingForm').onsubmit=async e=>{e.preventDefault();selected=$('date').value;if(!loaded){show('Atualize o calendário antes de reservar.');return;}if(!selected||selected<=today()||busy(selected)){show('Escolha uma data futura disponível.');return;}const button=e.submitter;button.disabled=true;try{await loadTerm();$('acceptTerms').checked=false;$('termsModal').classList.remove('hidden');$('acceptTerms').focus();}catch(error){show(error.message);}finally{button.disabled=false;}};
+  $('bookingForm').onsubmit=async e=>{
+    e.preventDefault();
+    selected=$('date').value;
+    if(!loaded){show('Atualize o calendário antes de reservar.');return;}
+    if(isSunday(selected)){show('Não são permitidas reservas aos domingos (a zeladoria só fará a limpeza na segunda-feira). Alugue no sábado.');return;}
+    if(!selected||selected<=today()||busy(selected)){show('Escolha uma data futura disponível.');return;}
+    const button=e.submitter;
+    button.disabled=true;
+    try{
+      await loadTerm();
+      $('acceptTerms').checked=false;
+      $('termsModal').classList.remove('hidden');
+      $('acceptTerms').focus();
+    }catch(error){show(error.message);}
+    finally{button.disabled=false;}
+  };
   $('cancelTerms').onclick=()=>{if(!saving){$('termsModal').classList.add('hidden');$('bookingForm').querySelector('button').focus();}};
   $('signTerms').onclick=async()=>{if(saving)return;if(!$('acceptTerms').checked){show('Aceite o termo para continuar.');return;}saving=true;$('signTerms').disabled=true;try{await send('bookings','POST',{room,date:selected,start:'10:00',end:'22:00',event:$('event').value,name:$('name').value,apartment:$('apartment').value,phone:$('phone').value,acceptTerms:true});$('termsModal').classList.add('hidden');$('bookingForm').reset();$('acceptTerms').checked=false;selected='';summary();show('Reserva solicitada com sucesso.');try{await loadBookings();}catch(error){loaded=false;renderCalendar();show('Reserva salva. Atualize o calendário para consultar.');}}catch(error){show(error.message);}finally{saving=false;$('signTerms').disabled=false;}};
   function theme(dark){document.documentElement.dataset.theme=dark?'dark':'light';$('themeToggle').textContent=dark?'Tema claro':'Tema escuro';try{localStorage.setItem('ltTheme',dark?'dark':'light');}catch{}}

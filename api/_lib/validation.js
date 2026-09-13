@@ -5,6 +5,10 @@ function validDate(value) {
   const date = new Date(value + 'T12:00:00Z');
   return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
 }
+function isSunday(value) {
+  if (!validDate(value)) return false;
+  return new Date(value + 'T12:00:00Z').getUTCDay() === 0;
+}
 function today() { return new Intl.DateTimeFormat('en-CA', { timeZone:'America/Sao_Paulo' }).format(new Date()); }
 function cpf(value) {
   if (typeof value !== 'string') return '';
@@ -16,4 +20,4 @@ function cpf(value) {
   }
   return id;
 }
-module.exports = { ROOMS, text, validDate, today, cpf };
+module.exports = { ROOMS, text, validDate, isSunday, today, cpf };

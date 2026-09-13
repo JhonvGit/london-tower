@@ -38,9 +38,9 @@ test('availability includes other residents without their personal data', async 
   assert.deepEqual(result.data.availability,[{room:'Oxford',date:'2099-09-15'}]);
   assert.equal(result.headers['Cache-Control'],'no-store');
 });
-test('booking validation rejects impossible dates, query objects, missing consent and arbitrary rooms', async () => {
+test('booking validation rejects impossible dates, query objects, missing consent, arbitrary rooms and Sundays', async () => {
   const cookie=await account();
-  for(const data of [{date:'2099-02-30'},{date:{$gt:''}},{room:'Unknown'},{acceptTerms:false},{start:'12:00'},{name:{$ne:null}},{date:'2000-01-01'}])assert.equal((await call('bookings','POST',booking(data),cookie)).status,400);
+  for(const data of [{date:'2099-02-30'},{date:{$gt:''}},{room:'Unknown'},{acceptTerms:false},{start:'12:00'},{name:{$ne:null}},{date:'2000-01-01'},{date:'2099-09-20'}])assert.equal((await call('bookings','POST',booking(data),cookie)).status,400);
   assert.equal(await db.collection('bookings').countDocuments(),0);
 });
 test('DELETE booking allows resident to cancel own booking and admin to cancel any or clean all pentest bookings', async () => {
@@ -182,7 +182,7 @@ test('portal escapes stored markup and synchronizes typed booking dates with the
 });
 test('portaria and admin see responsible contact details, occupied date summary and dedicated reservations tab', async () => {
   const resident=await account('resident');await account('staff','portaria');
-  await call('bookings','POST',booking({name:'Contato morador',apartment:'45B',phone:'11987654321',event:'Casamento',date:'2099-09-20'}),resident);
+  await call('bookings','POST',booking({name:'Contato morador',apartment:'45B',phone:'11987654321',event:'Casamento',date:'2099-09-19'}),resident);
   const {dom,$,submit}=browser();
   try{
     $('loginId').value='staff';$('loginPass').value='initial-password';submit('loginForm');
@@ -190,7 +190,7 @@ test('portaria and admin see responsible contact details, occupied date summary 
     assert.match($('reservationList').textContent,/11987654321/);assert.equal($('navAdmin').classList.contains('hidden'),true);
     
     // Dedicated reservations tab
-    await $('navReservations').onclick();
+    $('navReservations').click();
     await until(()=>$('reservationsPage').classList.contains('hidden')===false && $('fullReservationCards').textContent.includes('Contato morador'));
     assert.equal($('bookingPage').classList.contains('hidden'),true);
     assert.match($('fullReservationCards').textContent,/Contato morador/);
@@ -206,7 +206,7 @@ test('portaria and admin see responsible contact details, occupied date summary 
     $('reservationSearch').dispatchEvent(new dom.window.Event('input'));
     assert.match($('fullReservationCards').textContent,/Nenhuma reserva/);
 
-    const dayBtn=$('days').querySelector('[data-date="2099-09-20"]');
+    const dayBtn=$('days').querySelector('[data-date="2099-09-19"]');
     if(dayBtn) {
       dayBtn.click();
       assert.match($('selectedDate').parentElement.textContent,/Contato morador/);
