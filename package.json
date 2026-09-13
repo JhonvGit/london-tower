@@ -4,9 +4,16 @@
   "version": "1.0.0",
   "type": "commonjs",
   "scripts": {
-    "check": "node --check api/login.js && node --check api/accounts.js && node --check api/bookings.js"
+    "check": "node scripts/check.cjs",
+    "test": "node --test tests/*.test.cjs",
+    "setup": "node scripts/setup.cjs"
   },
+  "engines": { "node": ">=22.12" },
   "dependencies": {
     "mongodb": "^6.19.0"
+  },
+  "devDependencies": {
+    "jsdom": "^30.0.1",
+    "mongodb-memory-server": "^11.2.0"
   }
 }

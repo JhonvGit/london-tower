@@ -2,6 +2,7 @@
 .env.*
 !.env.example
 node_modules/
+.cache/
 
 # Arquivos enviados temporariamente para o ambiente de trabalho
 upload/

@@ -1,41 +1,31 @@
 const { getDb } = require('./_lib/db');
-const { hashPassword, verifyPassword, createSession, setCookie, clearCookie, json, body } = require('./_lib/security');
+const { verifyPassword, createSession, revokeSession, setCookie, clearCookie, json, body, failure } = require('./_lib/security');
 const crypto = require('crypto');
-const MAX_ATTEMPTS = 5;
 const WINDOW_MS = 15 * 60 * 1000;
-function clientIp(req) { return String(req.headers['x-forwarded-for'] || req.headers['x-real-ip'] || 'unknown').split(',')[0].trim(); }
-function attemptKey(identifier, ip) { return crypto.createHash('sha256').update(`${String(identifier).toLowerCase()}|${ip}`).digest('hex'); }
-
 module.exports = async (req, res) => {
   try {
+    if (!['POST','DELETE'].includes(req.method)) return json(res, 405, { error:'Método não permitido.' });
     const db = await getDb();
-    const users = db.collection('users');
-    await users.createIndex({ id: 1 }, { unique: true });
-    await users.updateOne({ id: 'superlondon' }, { $setOnInsert: { id:'superlondon', name:'Administrador', role:'admin', passwordHash:hashPassword('102030'), mustChange:true, createdAt:new Date() } }, { upsert:true });
-    await users.updateOne({ id: 'superportaria' }, { $setOnInsert: { id:'superportaria', name:'Super Portaria', role:'portaria', passwordHash:hashPassword('102030'), mustChange:true, createdAt:new Date() } }, { upsert:true });
-    if (req.method === 'DELETE') { clearCookie(res); return json(res, 200, { ok:true }); }
-    if (req.method !== 'POST') return json(res, 405, { error:'Método não permitido' });
+    if (req.method === 'DELETE') { await revokeSession(req, db); clearCookie(res); return json(res, 200, { ok:true }); }
     const { identifier, password } = await body(req);
-    const id = String(identifier || '').trim();
+    if (typeof identifier !== 'string' || typeof password !== 'string' || identifier.length > 100 || password.length > 256 || !identifier.trim() || !password) return json(res, 400, { error:'Informe usuário e senha válidos.' });
+    const input = identifier.trim().toLowerCase();
+    const id = /^[\d.\s-]+$/.test(input) ? input.replace(/\D/g,'') : input;
     const attempts = db.collection('login_attempts');
     await attempts.createIndex({ expiresAt:1 }, { expireAfterSeconds:0 });
-    const key = attemptKey(id, clientIp(req)), now = new Date();
-    const record = await attempts.findOne({ _id:key });
-    if (record && record.expiresAt > now && record.count >= MAX_ATTEMPTS) {
-      const minutes = Math.max(1, Math.ceil((record.expiresAt-now)/60000));
-      return json(res, 429, { error:`Muitas tentativas. Aguarde ${minutes} minuto(s) e tente novamente.` });
-    }
-    const user = await users.findOne({ $or:[{ id }, { id: id.replace(/\D/g,'') }] });
-    if (!user || !verifyPassword(String(password || ''), user.passwordHash)) {
-      const count = record && record.expiresAt > now ? record.count + 1 : 1;
-      await attempts.updateOne({ _id:key }, { $set:{ count, expiresAt:new Date(Date.now()+WINDOW_MS) } }, { upsert:true });
-      const remaining = Math.max(0, MAX_ATTEMPTS-count);
-      return json(res, 401, { error:remaining?`CPF, usuário ou senha inválidos. Tentativas restantes: ${remaining}.`:'Muitas tentativas. Aguarde 15 minutos.' });
-    }
+    const key = crypto.createHash('sha256').update(id).digest('hex'), now = new Date();
+    await attempts.deleteOne({ _id:key, expiresAt:{ $lte:now } });
+    const update = { $inc:{ count:1 }, $setOnInsert:{ expiresAt:new Date(now.getTime()+WINDOW_MS) } };
+    let record;
+    try { record = await attempts.findOneAndUpdate({ _id:key }, update, { upsert:true, returnDocument:'after' }); }
+    catch (error) { if (error.code !== 11000) throw error; record = await attempts.findOneAndUpdate({ _id:key }, { $inc:{ count:1 } }, { returnDocument:'after' }); }
+    if (record.count > 5) { res.setHeader('Retry-After', String(Math.max(1, Math.ceil((record.expiresAt-now)/1000)))); return json(res, 429, { error:'Muitas tentativas. Aguarde 15 minutos e tente novamente.' }); }
+    const user = await db.collection('users').findOne({ id });
+    if (!user || !verifyPassword(password, user.passwordHash)) return json(res, 401, { error:'CPF, usuário ou senha inválidos.' });
+    if (verifyPassword('102030', user.passwordHash)) return json(res, 403, { error:'A senha inicial antiga foi desativada. Solicite uma nova senha à administração.' });
     await attempts.deleteOne({ _id:key });
-    const role = user.id === 'superlondon' ? 'admin' : user.id === 'superportaria' ? 'portaria' : user.role || 'resident';
-    if (user.role !== role) await users.updateOne({ id:user.id }, { $set:{ role } });
-    setCookie(res, await createSession(db, { id:user.id, role }));
-    return json(res, 200, { user:{ id:user.id, name:user.name, apartment:user.apartment||'', phone:user.phone||'', role, mustChange:!!user.mustChange } });
-  } catch (e) { console.error(e); return json(res, 500, { error:'Falha ao conectar ao banco de dados.' }); }
+    await revokeSession(req, db);
+    setCookie(res, await createSession(db, { id:user.id, role:user.role }));
+    return json(res, 200, { user:{ id:user.id, name:user.name, apartment:user.apartment||'', phone:user.phone||'', role:user.role, mustChange:!!user.mustChange } });
+  } catch (error) { return failure(res, error, 'Falha ao efetuar login.'); }
 };
