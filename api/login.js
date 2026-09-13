@@ -1,5 +1,5 @@
 const { getDb } = require('./_lib/db');
-const { hashPassword, verifyPassword, sign, setCookie, clearCookie, json, body } = require('./_lib/security');
+const { hashPassword, verifyPassword, createSession, setCookie, clearCookie, json, body } = require('./_lib/security');
 
 module.exports = async (req, res) => {
   try {
@@ -14,7 +14,7 @@ module.exports = async (req, res) => {
     const id = String(identifier || '').trim();
     const user = await users.findOne({ $or:[{ id }, { id: id.replace(/\D/g,'') }] });
     if (!user || !verifyPassword(String(password || ''), user.passwordHash)) return json(res, 401, { error:'CPF, usuário ou senha inválidos.' });
-    setCookie(res, sign({ id:user.id, role:user.role, exp:Date.now()+28800000 }));
+    setCookie(res, await createSession(db, { id:user.id, role:user.role }));
     return json(res, 200, { user:{ id:user.id, name:user.name, apartment:user.apartment||'', phone:user.phone||'', role:user.role, mustChange:!!user.mustChange } });
   } catch (e) { console.error(e); return json(res, 500, { error:'Falha ao conectar ao banco de dados.' }); }
 };

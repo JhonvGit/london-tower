@@ -2,8 +2,9 @@ const { getDb } = require('./_lib/db');
 const { read, json, body } = require('./_lib/security');
 module.exports = async (req, res) => {
   try {
-    const session = read(req); if (!session) return json(res, 401, { error:'Sessão expirada.' });
-    const bookings = (await getDb()).collection('bookings');
+    const db = await getDb();
+    const session = await read(req, db); if (!session) return json(res, 401, { error:'Sessão expirada.' });
+    const bookings = db.collection('bookings');
     if (req.method === 'GET') {
       const filter = session.role === 'admin' || session.role === 'portaria' ? {} : { user:session.id };
       return json(res, 200, { bookings:await bookings.find(filter).sort({createdAt:-1}).toArray() });
