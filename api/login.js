@@ -33,7 +33,9 @@ module.exports = async (req, res) => {
       return json(res, 401, { error:remaining?`CPF, usuário ou senha inválidos. Tentativas restantes: ${remaining}.`:'Muitas tentativas. Aguarde 15 minutos.' });
     }
     await attempts.deleteOne({ _id:key });
-    setCookie(res, await createSession(db, { id:user.id, role:user.role }));
-    return json(res, 200, { user:{ id:user.id, name:user.name, apartment:user.apartment||'', phone:user.phone||'', role:user.role, mustChange:!!user.mustChange } });
+    const role = user.id === 'superlondon' ? 'admin' : user.id === 'superportaria' ? 'portaria' : user.role || 'resident';
+    if (user.role !== role) await users.updateOne({ id:user.id }, { $set:{ role } });
+    setCookie(res, await createSession(db, { id:user.id, role }));
+    return json(res, 200, { user:{ id:user.id, name:user.name, apartment:user.apartment||'', phone:user.phone||'', role, mustChange:!!user.mustChange } });
   } catch (e) { console.error(e); return json(res, 500, { error:'Falha ao conectar ao banco de dados.' }); }
 };
