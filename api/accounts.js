@@ -4,12 +4,20 @@ const { text, cpf } = require('./_lib/validation');
 const crypto = require('crypto');
 module.exports = async (req, res) => {
   try {
-    if (!['GET','POST'].includes(req.method)) return json(res, 405, { error:'Método não permitido.' });
+    if (!['GET','POST','DELETE'].includes(req.method)) return json(res, 405, { error:'Método não permitido.' });
     const db = await getDb(), session = await read(req, db);
     if (!session || session.role !== 'admin') return json(res, 403, { error:'Acesso restrito.' });
     if (session.mustChange) return json(res, 403, { error:'Altere sua senha inicial antes de continuar.' });
     const users = db.collection('users');
     if (req.method === 'GET') return json(res, 200, { accounts:await users.find({}, { projection:{ passwordHash:0 } }).sort({createdAt:1}).toArray() });
+    if (req.method === 'DELETE') {
+      const data = await body(req).catch(() => ({}));
+      if (!data.id) return json(res, 400, { error:'Informe o ID do usuário a ser excluído.' });
+      if (data.id === session.id) return json(res, 400, { error:'Você não pode excluir sua própria conta.' });
+      const result = await users.deleteOne({ id: data.id });
+      if (result.deletedCount === 0) return json(res, 404, { error:'Usuário não encontrado.' });
+      return json(res, 200, { ok:true });
+    }
     const data = await body(req);
     if (!['resident','portaria'].includes(data.role) || !text(data.name)) return json(res, 400, { error:'Informe nome e tipo de conta válidos.' });
     const id = data.role === 'portaria' ? 'superportaria' : cpf(data.cpf);
