@@ -4,8 +4,8 @@
   const escape = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const rooms = [
     {name:'Oxford',capacity:40,image:'photo-1519167758481-83f550bb49b3',desc:'Ambiente acolhedor para comemorações e encontros.'},
-    {name:'Napoli',capacity:30,image:'photo-1492684223066-81342ee5ff30',desc:'Salão elegante para reuniões e celebrações menores.'},
-    {name:'Rooftop',capacity:60,image:'photo-1519671482749-fd09be7ccebf',desc:'Espaço amplo para eventos especiais com vista.'}
+    {name:'Napoli',capacity:20,image:'photo-1492684223066-81342ee5ff30',desc:'Salão elegante para reuniões e celebrações menores.'},
+    {name:'Rooftop',capacity:20,image:'photo-1519671482749-fd09be7ccebf',desc:'Espaço amplo para eventos especiais com vista.'}
   ];
   const today = () => new Intl.DateTimeFormat('en-CA',{timeZone:'America/Sao_Paulo'}).format(new Date());
   const tomorrow = () => { const d = new Date(today()+'T12:00:00Z'); d.setUTCDate(d.getUTCDate()+1); return d.toISOString().slice(0,10); };
