@@ -328,7 +328,7 @@
     const button=e.submitter;
     button.disabled=true;
     try{
-      await loadTerm();
+      await loadSettings();
       $('acceptTerms').checked=false;
       $('termsModal').classList.remove('hidden');
       $('acceptTerms').focus();
